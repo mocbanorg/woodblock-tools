@@ -18,7 +18,7 @@ Clone repository:
 
 ```powershell
 git clone https://github.com/mocbanorg/woodblock-tools
-cd mocbanorg
+cd woodblock-tools
 ```
 
 Tạo và kích hoạt môi trường ảo:
