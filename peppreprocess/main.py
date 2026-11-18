@@ -1,3 +1,4 @@
+import argparse
 import csv
 import cv2
 import numpy as np
@@ -7,21 +8,14 @@ import os
 import tempfile
 
 from pathlib import Path
-
-from step_01.global_deskew import global_deskew
-from step_02.crop_images import crop
-from step_03.preprocess import preprocess
+from .step_01.global_deskew import global_deskew
+from .step_02.crop_images import crop
+from .step_03.preprocess import preprocess
 
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
-MAIN_PREPROCESS_MODE = "full" # Options: "full", "gp_only", "cde_only", "none"
-INPUT_DIR = Path(r"")
-
-OUTPUT_DIR = Path(r"")
-
-CSV_PATH = OUTPUT_DIR / "processing_results.csv"
 
 IMAGE_EXTENSIONS = {
     ".jpg",
@@ -229,8 +223,9 @@ def write_image(image_path: Path, image: np.ndarray) -> bool:
 def process_image(
     input_path: Path,
     output_path: Path,
+    parameters: dict,
     step=(True, True, True),
-    main_preprocess_mode: str = MAIN_PREPROCESS_MODE,
+    main_preprocess_mode: str = "full",
 ) -> dict:
 
     if len(step) != 3 or not all(isinstance(x, (bool, np.bool_)) for x in step):
@@ -463,7 +458,18 @@ def process_image(
 
 
 
-def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MODE):
+def main(
+    main_preprocess_mode: str,
+    input_dir: Path,
+    output_dir: Path,
+    csv_path: Path,
+    step: tuple,
+    parameters=parameters,
+):
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir)
+    csv_path = Path(csv_path)
+    step = tuple(bool(value) for value in step)
 
     if len(step) != 3 or not all(
         isinstance(x, (bool, np.bool_)) for x in step
@@ -482,14 +488,14 @@ def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MO
     # --------------------------------------------------------
     # Validate input directory
     # --------------------------------------------------------
-    if not INPUT_DIR.exists():
+    if not input_dir.exists():
         raise FileNotFoundError(
-            f"Input directory does not exist: {INPUT_DIR}"
+            f"Input directory does not exist: {input_dir}"
         )
 
-    if not INPUT_DIR.is_dir():
+    if not input_dir.is_dir():
         raise NotADirectoryError(
-            f"Input path is not a directory: {INPUT_DIR}"
+            f"Input path is not a directory: {input_dir}"
         )
 
     # --------------------------------------------------------
@@ -497,7 +503,7 @@ def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MO
     # --------------------------------------------------------
     image_paths = sorted(
         path
-        for path in INPUT_DIR.rglob("*")
+        for path in input_dir.rglob("*")
         if path.is_file()
         and path.suffix.lower() in IMAGE_EXTENSIONS
     )
@@ -505,20 +511,20 @@ def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MO
     total_images = len(image_paths)
 
     if total_images == 0:
-        print(f"No images found in: {INPUT_DIR}")
+        print(f"No images found in: {input_dir}")
         return
 
-    OUTPUT_DIR.mkdir(
+    output_dir.mkdir(
         parents=True,
         exist_ok=True,
     )
 
     # Upgrade the CSV header if it was created by an older version.
     # Old rows are preserved; rows without geometry metadata will be reprocessed.
-    ensure_csv_schema(CSV_PATH)
+    ensure_csv_schema(csv_path)
 
     # Load previous results once.
-    rows = load_csv_results(CSV_PATH)
+    rows = load_csv_results(csv_path)
 
     # --------------------------------------------------------
     # Statistics
@@ -531,9 +537,9 @@ def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MO
     print("BATCH PREPROCESSING")
     print("=" * 70)
     print(f"Main preprocess mode: {main_preprocess_mode}")
-    print(f"Input  : {INPUT_DIR}")
-    print(f"Output : {OUTPUT_DIR}")
-    print(f"CSV    : {CSV_PATH}")
+    print(f"Input  : {input_dir}")
+    print(f"Output : {output_dir}")
+    print(f"CSV    : {csv_path}")
     print(f"Images : {total_images}")
     print(f"Step configuration: {step}")
     print(
@@ -554,12 +560,12 @@ def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MO
     # Do not open the CSV in Excel while this script runs.
     # --------------------------------------------------------
     csv_exists = (
-        CSV_PATH.is_file()
-        and CSV_PATH.stat().st_size > 0
+        csv_path.is_file()
+        and csv_path.stat().st_size > 0
     )
 
     try:
-        with CSV_PATH.open(
+        with csv_path.open(
             "a",
             newline="",
             encoding="utf-8-sig",
@@ -584,12 +590,12 @@ def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MO
             ):
 
                 relative_path = input_path.relative_to(
-                    INPUT_DIR
+                    input_dir
                 )
 
                 relative_key = relative_path.as_posix()
 
-                output_path = OUTPUT_DIR / relative_path
+                output_path = output_dir / relative_path
 
                 previous = rows.get(relative_key, {})
 
@@ -651,8 +657,9 @@ def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MO
                 # Process image
                 # --------------------------------------------
                 result = process_image(
-                    input_path,
-                    output_path,
+                    input_path=input_path,
+                    output_path=output_path,
+                    parameters=parameters,
                     step=step,
                     main_preprocess_mode=main_preprocess_mode,
                 )
@@ -755,12 +762,6 @@ def main(step=(True, True, True), main_preprocess_mode: str = MAIN_PREPROCESS_MO
     print(f"Processed         : {processed_count}")
     print(f"Skipped           : {skipped_count}")
     print(f"Failed this run   : {failed_count}")
-    print(f"CSV results       : {CSV_PATH}")
+    print(f"CSV results       : {csv_path}")
     print("=" * 70)
 
-
-if __name__ == "__main__":
-   main(
-        step=(True, True, True),
-        main_preprocess_mode=MAIN_PREPROCESS_MODE,
-    )
