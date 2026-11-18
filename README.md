@@ -17,7 +17,7 @@ Pipeline tiền xử lý ảnh gồm 3 bước:
 Clone repository:
 
 ```powershell
-git clone <URL_REPOSITORY>
+git clone https://github.com/mocbanorg/woodblock-tools
 cd mocbanorg
 ```
 
